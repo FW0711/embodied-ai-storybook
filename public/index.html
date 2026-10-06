@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI 具身繪本動態互動系統</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      @keyframes pulse-glow {
+        0%, 100% { transform: scale(1); opacity: 1; }
+        50% { transform: scale(1.03); opacity: 0.9; }
+      }
+      .animate-glow { animation: pulse-glow 2s infinite ease-in-out; }
+    </style>
+  </head>
+  <body class="min-h-screen bg-amber-50/60 text-slate-800 font-sans p-4 md:p-8">
+    
+    <!-- 手勢即時觸發懸浮通知列 -->
+    <div id="gesture-toast" class="hidden fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-emerald-600 text-white px-8 py-4 rounded-2xl shadow-2xl text-xl font-bold flex items-center gap-3 animate-bounce">
+      <span class="text-3xl">✋</span>
+      <span id="toast-text">偵測到實體手勢！正在即時生成分支結局...</span>
+    </div>
+
+    <main class="max-w-4xl mx-auto space-y-8">
+      
+      <!-- 👨‍🏫 區塊 1：教師後台控制列 (Teacher Control Panel) -->
+      <section class="bg-white rounded-3xl p-6 shadow-md border border-amber-200">
+        <div class="flex items-center gap-2 mb-4 border-b border-amber-100 pb-3">
+          <span class="text-2xl">👨‍🏫</span>
+          <h2 class="text-lg font-bold text-amber-900">教師課前準備後台</h2>
+        </div>
+        
+        <form id="story-form" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div class="md:col-span-2">
+            <label class="block text-sm font-semibold mb-1 text-slate-600">故事教學主題</label>
+            <input id="topic" type="text" required placeholder="例如：資源分享、小兔子的勇氣冒險..." class="w-full p-3 rounded-xl border border-slate-200 bg-slate-50 focus:ring-2 focus:ring-amber-400 focus:outline-none" />
+          </div>
+          <div>
+            <label class="block text-sm font-semibold mb-1 text-slate-600">學生年齡層</label>
+            <select id="ageGroup" class="w-full p-3 rounded-xl border border-slate-200 bg-slate-50 focus:ring-2 focus:ring-amber-400 focus:outline-none">
+              <option value="低年級">低年級 (國小 1-2 年級)</option>
+              <option value="中年級" selected>中年級 (國小 3-4 年級)</option>
+              <option value="高年級">高年級 (國小 5-6 年級)</option>
+            </select>
+          </div>
+          <button id="submit-btn" type="submit" class="md:col-span-3 py-3.5 bg-amber-500 hover:bg-amber-600 text-white text-lg font-bold rounded-xl shadow-md transition flex items-center justify-center gap-2">
+            ✨ 生成前導繪本 (前 3 頁與決策思考點)
+          </button>
+        </form>
+      </section>
+
+      <!-- ⏳ 載入動畫狀態 -->
+      <div id="loading" class="hidden text-center my-12 space-y-3">
+        <div class="text-5xl animate-spin inline-block">🪄</div>
+        <p class="text-xl font-bold text-amber-700 animate-pulse">Gemini AI 正在撰寫繪本故事並繪製插圖中...</p>
+      </div>
+
+      <div id="error-box" class="hidden p-4 bg-rose-100 text-rose-700 rounded-xl font-medium"></div>
+
+      <!-- 👧 區塊 2：學生大螢幕繪本展示區 (Student Storybook View) -->
+      <section id="result" class="hidden space-y-8">
+        <h1 id="story-title" class="text-3xl md:text-4xl font-extrabold text-center text-amber-900 bg-white/80 py-4 rounded-2xl shadow-sm border border-amber-200"></h1>
+        
+        <!-- 繪本卡片容器 -->
+        <div id="cards-container" class="space-y-8"></div>
+
+        <!-- ✋ 具身手勢決策視覺引導卡 (Decision Node) -->
+        <div id="decision-node-card" class="bg-gradient-to-r from-amber-400 via-rose-400 to-sky-400 p-1 rounded-3xl shadow-xl animate-glow">
+          <div class="bg-white p-6 md:p-8 rounded-[22px] text-center space-y-6">
+            <div class="flex items-center justify-center gap-2">
+              <span class="inline-block px-4 py-1.5 bg-rose-100 text-rose-700 font-bold rounded-full text-sm">
+                ✋ 具身抉擇時刻 (Embodied Decision Point)
+              </span>
+              <span id="branch-badge" class="inline-block px-4 py-1.5 bg-amber-100 text-amber-800 font-bold rounded-full text-sm">
+                進度: 第 1 / 3 次選擇
+              </span>
+            </div>
+            
+            <h3 id="decision-title" class="text-2xl md:text-3xl font-extrabold text-slate-800">伸出你的雙手，為故事的主角做決定吧！</h3>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
+              <div class="p-5 bg-rose-50 border-2 border-rose-200 rounded-2xl space-y-2">
+                <span class="text-4xl">🤏</span>
+                <h4 class="text-xl font-bold text-rose-600">選項 A：近距離手勢 (< 10cm)</h4>
+                <p class="text-slate-600 font-medium">將手靠近超音波感測器上方</p>
+              </div>
+              <div class="p-5 bg-sky-50 border-2 border-sky-200 rounded-2xl space-y-2">
+                <span class="text-4xl">🖐️</span>
+                <h4 class="text-xl font-bold text-sky-600">選項 B：遠距離手勢 (20~35cm)</h4>
+                <p class="text-slate-600 font-medium">將手懸停在感測器較高處</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </main>
+
+    <script>
+      const form = document.getElementById('story-form');
+      const loading = document.getElementById('loading');
+      const result = document.getElementById('result');
+      const errorBox = document.getElementById('error-box');
+      const storyTitle = document.getElementById('story-title');
+      const cardsContainer = document.getElementById('cards-container');
+      const gestureToast = document.getElementById('gesture-toast');
+      const toastText = document.getElementById('toast-text');
+      const decisionNodeCard = document.getElementById('decision-node-card');
+      const branchBadge = document.getElementById('branch-badge');
+
+      let currentStoryContext = { topic: '', ageGroup: '', title: '', pages: [] };
+
+      // 📌 分支控制變數
+      let branchCount = 0;
+      const MAX_BRANCHES = 3;
+      let isGenerating = false; 
+
+      // 🎤 生動說故事語音朗讀
+      function speakStoryText(text) {
+        if (!('speechSynthesis' in window)) return;
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(text);
+        const voices = window.speechSynthesis.getVoices();
+        const preferredVoice = voices.find(v => (v.lang.includes('zh-TW') || v.lang.includes('zh')) && (v.name.includes('Natural') || v.name.includes('Google'))) || voices.find(v => v.lang.includes('zh-TW'));
+        if (preferredVoice) utterance.voice = preferredVoice;
+        utterance.lang = 'zh-TW';
+        utterance.rate = 0.88;
+        utterance.pitch = 1.15;
+        window.speechSynthesis.speak(utterance);
+      }
+
+      // 渲染繪本卡片
+      function renderStoryCards(pages, isBranch = false, currentBranchIndex = 1) {
+        pages.forEach((p, idx) => {
+          const cleanPrompt = encodeURIComponent(p.imagePrompt.slice(0, 150) + ", children book illustration, cute, watercolor style");
+          const seed = Math.floor(Math.random() * 9999);
+          const primaryImageUrl = `https://image.pollinations.ai/prompt/${cleanPrompt}?width=800&height=450&seed=${seed}&model=flux&nologo=true`;
+
+          const card = document.createElement('div');
+          card.className = `p-6 md:p-8 rounded-3xl shadow-lg border space-y-6 transition-all ${
+            isBranch 
+              ? 'bg-emerald-50/90 border-emerald-300 ring-4 ring-emerald-200' 
+              : 'bg-white border-amber-100'
+          }`;
+
+          card.innerHTML = `
+            <div class="flex items-center justify-between">
+              <span class="font-extrabold text-xl ${isBranch ? 'text-emerald-700' : 'text-amber-600'}">
+                ${isBranch ? `🌿 手勢分支 (${currentBranchIndex}/${MAX_BRANCHES}) - 第 ${idx + 1} 頁` : `第 ${p.pageNumber} 頁`}
+              </span>
+              <button onclick="speakStoryText('${p.text.replace(/'/g, "\\'")}')" class="px-4 py-2 ${isBranch ? 'bg-emerald-500 hover:bg-emerald-600' : 'bg-rose-500 hover:bg-rose-600'} text-white rounded-2xl text-base font-bold transition flex items-center gap-2 shadow-sm">
+                🔊 朗讀故事
+              </button>
+            </div>
+
+            <div class="overflow-hidden rounded-2xl bg-slate-100 min-h-[250px] flex items-center justify-center border border-slate-200 shadow-inner">
+              <img src="${primaryImageUrl}" alt="Page Illustration" class="w-full h-auto object-cover" onerror="this.onerror=null; this.src='https://picsum.photos/seed/${seed}/800/450';" />
+            </div>
+
+            <p class="text-slate-800 text-lg md:text-2xl leading-relaxed font-semibold tracking-wide">${p.text}</p>
+          `;
+          cardsContainer.appendChild(card);
+        });
+      }
+
+      // 1. 提交生成前導故事 (前 3 頁)
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        errorBox.classList.add('hidden');
+        result.classList.add('hidden');
+        loading.classList.remove('hidden');
+
+        // 🔄 重置計數器與介面
+        branchCount = 0;
+        isGenerating = false;
+        decisionNodeCard.classList.remove('hidden');
+        branchBadge.textContent = `進度: 第 1 / ${MAX_BRANCHES} 次選擇`;
+
+        const topic = document.getElementById('topic').value;
+        const ageGroup = document.getElementById('ageGroup').value;
+
+        try {
+          const res = await fetch('/api/generate-story', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+              topic: `${topic} (請生成 3 頁故事前導。⚠️ 注意：故事才剛開始，絕對不要寫出結局！請在第 3 頁最後給出情境，並留下一對新的關鍵選擇題：選項 A 與選項 B，引導讀者做抉擇)`, 
+              ageGroup 
+            })
+          });
+
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || '生成失敗');
+
+          currentStoryContext = { topic, ageGroup, title: data.title, pages: data.pages };
+          storyTitle.textContent = data.title;
+          cardsContainer.innerHTML = '';
+
+          renderStoryCards(data.pages, false);
+          result.classList.remove('hidden');
+
+        } catch (err) {
+          errorBox.textContent = '❌ 發生錯誤：' + err.message;
+          errorBox.classList.remove('hidden');
+        } finally {
+          loading.classList.add('hidden');
+        }
+      });
+
+      // 2. 接收手勢並叫用 Gemini 續寫分支故事
+      async function triggerGestureBranch(action) {
+        // 🛑 如果已達到或超過上限，強行終止
+        if (branchCount >= MAX_BRANCHES || isGenerating) return;
+
+        isGenerating = true;
+        branchCount++; // 進度次數正式 +1 (1, 2, 3)
+
+        const isFinal = (branchCount === MAX_BRANCHES);
+        const choiceName = (action === 'CHOICE_A') ? '選項 A (近距離)' : '選項 B (遠距離)';
+
+        toastText.textContent = isFinal
+          ? `✋ 收到【${choiceName}】！正在撰寫第 3 次選擇的【最終大結局】...`
+          : `✋ 收到【${choiceName}】！正在撰寫第 ${branchCount}/${MAX_BRANCHES} 次選擇的分支...`;
+        
+        gestureToast.classList.remove('hidden');
+
+        try {
+          let promptInstruction = '';
+          
+          if (isFinal) {
+            // 🎯 第 3 次：強制寫出結局，不留選項
+            promptInstruction = `這是全劇的第 ${branchCount} 次選擇，也是【最後一次選擇】！請根據選了【${choiceName}】，寫出 2 頁完整的【最終大結局】！⚠️ 請為全劇畫上完美句點，絕對不要再提供任何選項 A/B！`;
+          } else {
+            // 🎯 第 1、2 次：強制不准寫結局，必須留選項 A/B
+            promptInstruction = `這是全劇的第 ${branchCount}/${MAX_BRANCHES} 次選擇。請根據選了【${choiceName}】，寫出 2 頁接續的故事發展。⚠️ 警告：故事尚未結束，絕對不可以寫出大結局！請務必在第 2 頁結尾留下新的「選項 A」與「選項 B」，讓讀者進行下一次選擇！`;
+          }
+
+          const fullPrompt = `故事主題：${currentStoryContext.topic}。前面故事內容：${JSON.stringify(currentStoryContext.pages)}。學生選擇了【${choiceName}】。${promptInstruction}`;
+
+          const res = await fetch('/api/generate-story', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ topic: fullPrompt, ageGroup: currentStoryContext.ageGroup })
+          });
+
+          const data = await res.json();
+          if (res.ok && data.pages) {
+            currentStoryContext.pages = currentStoryContext.pages.concat(data.pages);
+            
+            // 渲染產出的卡片
+            renderStoryCards(data.pages, true, branchCount);
+
+            if (isFinal) {
+              // 達到第 3 次，隱藏抉擇卡片
+              decisionNodeCard.classList.add('hidden');
+              toastText.textContent = '🎉 故事已來到最終完美大結局！';
+            } else {
+              // 未達 3 次，更新進度標籤 (如：進度: 第 2 / 3 次選擇)
+              branchBadge.textContent = `進度: 第 ${branchCount + 1} / ${MAX_BRANCHES} 次選擇`;
+            }
+          } else {
+            branchCount--; // 失敗退回
+          }
+        } catch (err) {
+          console.error('分支生成失敗:', err);
+          branchCount--; 
+        } finally {
+          isGenerating = false;
+          setTimeout(() => gestureToast.classList.add('hidden'), 3500);
+        }
+      }
+
+      // 3. 輪詢讀取 ESP32 手勢事件
+      setInterval(async () => {
+        // 🛑 如果正在生成 或 已經達到 3 次上限，直接跳過不讀取
+        if (isGenerating || branchCount >= MAX_BRANCHES) return;
+
+        try {
+          const res = await fetch('/api/sensor-event/latest');
+          const data = await res.json();
+          if (data && data.newEvent) {
+            console.log('📡 [前端收到手勢]', data.action, `(目前完成度: ${branchCount}/${MAX_BRANCHES})`);
+            triggerGestureBranch(data.action);
+          }
+        } catch (err) {
+          // 靜默處理
+        }
+      }, 1000);
+    </script>
+  </body>
+</html>
